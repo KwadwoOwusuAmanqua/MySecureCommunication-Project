@@ -18,6 +18,7 @@
 #include <openssl/bio.h>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 namespace SecureComm {
 
@@ -59,12 +60,15 @@ public:
     std::vector<uint8_t> generate_symmetric_key(size_t size = KEY_SIZE);
     
     // Encryption/Decryption
-    std::vector<uint8_t> encrypt_aes_gcm(const std::vector<uint8_t>& data, 
+    // Encryption/Decryption
+    std::pair<std::vector<uint8_t>, std::vector<uint8_t>> encrypt_aes_gcm(
+                                        const std::vector<uint8_t>& data, 
                                         const std::vector<uint8_t>& key,
                                         const std::vector<uint8_t>& iv);
     std::vector<uint8_t> decrypt_aes_gcm(const std::vector<uint8_t>& encrypted_data,
                                         const std::vector<uint8_t>& key,
-                                        const std::vector<uint8_t>& iv);
+                                        const std::vector<uint8_t>& iv,
+                                        const std::vector<uint8_t>& tag);
     
     // Key exchange
     std::vector<uint8_t> perform_dh_key_exchange(const std::vector<uint8_t>& private_key,

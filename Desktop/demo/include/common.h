@@ -31,11 +31,14 @@ namespace SecureComm {
 // Protocol constants
 constexpr uint16_t DEFAULT_PORT = 8080;
 constexpr size_t MAX_MESSAGE_SIZE = 4096;
-constexpr size_t KEY_SIZE = 32;
+constexpr size_t GCM_TAG_SIZE = 16;
+constexpr size_t KEY_SIZE = 32;       // AES Key size
+constexpr size_t DH_KEY_SIZE = 256;   // DH Key size (2048 bits)
 constexpr size_t IV_SIZE = 12;
 constexpr size_t HASH_SIZE = 32;
 constexpr size_t SIGNATURE_SIZE = 256;
 constexpr size_t HMAC_SIZE = 32;
+constexpr size_t MAX_USERNAME_SIZE = 32;
 
 // Message types
 enum class MessageType : uint8_t {
@@ -76,17 +79,21 @@ struct HandshakeMessage {
     uint32_t client_id;
     uint32_t session_id;
     ForwardSecrecyType fs_type;
-    uint8_t public_key[KEY_SIZE];
+    uint8_t public_key[DH_KEY_SIZE];
     uint8_t nonce[IV_SIZE];
+    char username[MAX_USERNAME_SIZE];
 };
 
 // Encrypted message structure
 struct EncryptedMessage {
     uint32_t session_id;
     uint32_t message_id;
+    uint32_t data_len; // Actual length of encrypted data
     uint8_t iv[IV_SIZE];
+    uint8_t tag[GCM_TAG_SIZE];
     uint8_t encrypted_data[MAX_MESSAGE_SIZE];
     uint8_t signature[SIGNATURE_SIZE];
+    char target_username[MAX_USERNAME_SIZE]; // Username to send to, or empty for broadcast
 };
 
 // Session information

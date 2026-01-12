@@ -141,13 +141,12 @@ KeyPair CryptoManager::generate_dh_keypair() {
     // Create KeyPair with raw key data (no length prefix)
     KeyPair keypair;
     
-    // For the handshake protocol, we need to fit in KEY_SIZE (32 bytes)
-    // Take the first 32 bytes of the public key (most significant bytes)
-    keypair.public_key.resize(SecureComm::KEY_SIZE);
-    size_t copy_size = std::min<size_t>(pub_len, SecureComm::KEY_SIZE);
+    // Use full DH key size
+    keypair.public_key.resize(SecureComm::DH_KEY_SIZE);
+    size_t copy_size = std::min<size_t>(pub_len, SecureComm::DH_KEY_SIZE);
     std::copy(pub_bytes.begin(), pub_bytes.begin() + copy_size, keypair.public_key.begin());
     // Zero-pad if needed
-    if (copy_size < SecureComm::KEY_SIZE) {
+    if (copy_size < SecureComm::DH_KEY_SIZE) {
         std::fill(keypair.public_key.begin() + copy_size, keypair.public_key.end(), 0);
     }
     
@@ -165,7 +164,8 @@ std::vector<uint8_t> CryptoManager::generate_symmetric_key(size_t size) {
     return generate_random_bytes(size);
 }
 
-std::vector<uint8_t> CryptoManager::encrypt_aes_gcm(const std::vector<uint8_t>& data,
+std::pair<std::vector<uint8_t>, std::vector<uint8_t>> CryptoManager::encrypt_aes_gcm(
+                                                   const std::vector<uint8_t>& data,
                                                    const std::vector<uint8_t>& key,
                                                    const std::vector<uint8_t>& iv) {
     EVPContext ctx;
@@ -188,12 +188,19 @@ std::vector<uint8_t> CryptoManager::encrypt_aes_gcm(const std::vector<uint8_t>& 
     }
 
     encrypted.resize(len + final_len);
-    return encrypted;
+
+    std::vector<uint8_t> tag(16);
+    if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, 16, tag.data()) != 1) {
+        throw CryptoException("Failed to get GCM tag");
+    }
+
+    return {encrypted, tag};
 }
 
 std::vector<uint8_t> CryptoManager::decrypt_aes_gcm(const std::vector<uint8_t>& encrypted_data,
                                                    const std::vector<uint8_t>& key,
-                                                   const std::vector<uint8_t>& iv) {
+                                                   const std::vector<uint8_t>& iv,
+                                                   const std::vector<uint8_t>& tag) {
     EVPContext ctx;
     const EVP_CIPHER* cipher = EVP_aes_256_gcm();
 
@@ -206,6 +213,11 @@ std::vector<uint8_t> CryptoManager::decrypt_aes_gcm(const std::vector<uint8_t>& 
     
     if (EVP_DecryptUpdate(ctx.get(), decrypted.data(), &len, encrypted_data.data(), static_cast<int>(encrypted_data.size())) != 1) {
         throw CryptoException("Failed to decrypt data");
+    }
+
+    // Set expected tag
+    if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, static_cast<int>(tag.size()), const_cast<uint8_t*>(tag.data())) != 1) {
+        throw CryptoException("Failed to set GCM tag");
     }
 
     int final_len;
